@@ -1,0 +1,68 @@
+# docker-compose.yml
+services:
+  # ============================================================================
+  # 🎨 1. FRONTEND : L'Interface UI (Vue.js -> Nginx Alpine)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cognitif_frontend
+    ports:
+      # FIX : On passe sur le port 3333 pour ne pas crasher wexia-frontend (3000)
+      - "3333:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - cognitif_net
+
+  # ============================================================================
+  # 🧠 2. BACKEND : L'Orchestrateur (FastAPI + Pydantic-AI)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cognitif_backend
+    ports:
+      # FIX : On passe sur le port 8020 pour ne pas crasher supabase-kong (8000)
+      - "8020:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - cognitif_net
+
+  # ============================================================================
+  # 🔌 3. MCP SERVER : Le Connecteur Notion (FastMCP)
+  # ============================================================================
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: cognitif_mcp
+    ports:
+      # FIX : On passe sur le port 8021 pour ne pas crasher les API gateways
+      - "8021:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - cognitif_net
+
+networks:
+  cognitif_net:
+    driver: bridge

@@ -1,0 +1,41 @@
+# --- OS & IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# --- PYTHON (Backend & MCP) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.python-version
+
+# --- NODE/VUE (Frontend) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+.npm
+npm-debug.log*
+
+# --- DOCKER ---
+.docker-compose.override.yml
+
+# --- DATA & SECRETS (LE PLUS IMPORTANT) ---
+# On ignore tout le dossier data qui contient ta BDD, tes images et tes logs
+data/
+# Exception : on veut garder l'arborescence vide si besoin (optionnel)
+!data/.gitkeep
+
+# Secrets Notion et clés API
+.env
+*.pem
+*.key
