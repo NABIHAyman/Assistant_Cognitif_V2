@@ -23,6 +23,7 @@ os.environ["NO_PROXY"] = "127.0.0.1,localhost,100.89.63.25,host.docker.internal,
 from app.models import Proposition, get_db, SessionLocal
 from app.utils.tree_helper import get_knowledge_context
 from app.executor import _write_markdown, _update_taxonomy, _call_mcp_notion
+from app.config import app_settings
 
 
 import logfire  # <--- AJOUTER
@@ -123,15 +124,14 @@ with open("app/core/instructions.md", "r", encoding="utf-8") as f:
 # ==============================================================================
 # CONFIGURATION DE L'AGENT (SANS le result_type qui crashe)
 # ==============================================================================
-llm_provider = os.getenv("LLM_PROVIDER", "ollama")
-
-if llm_provider == "gemini":
-    agent = Agent('gemini-2.5-flash-lite', system_prompt=SYSTEM_PROMPT)
-else:
-    ollama_host = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
-    ollama_model_name = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
-    provider = OpenAIProvider(base_url=f"{ollama_host}/v1", api_key="ollama-local")
-    agent = Agent(OpenAIChatModel(ollama_model_name, provider=provider), system_prompt=SYSTEM_PROMPT)
+def get_agent():
+    """Génère l'Agent IA dynamiquement en fonction des paramètres "à chaud"."""
+    conf = app_settings.settings
+    if conf.llm_provider == "gemini":
+        return Agent('gemini-2.5-flash-lite', system_prompt=SYSTEM_PROMPT)
+    else:
+        provider = OpenAIProvider(base_url=f"{conf.ollama_host}/v1", api_key="ollama-local")
+        return Agent(OpenAIChatModel(conf.ollama_model, provider=provider), system_prompt=SYSTEM_PROMPT)
 
 
 # ==============================================================================
@@ -147,10 +147,12 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
 
     image_bytes = await file.read()
     try:
+        conf = app_settings.settings
         img = Image.open(io.BytesIO(image_bytes))
-        img.thumbnail((1200, 1200))
+        img.thumbnail((conf.image_resolution, conf.image_resolution))
+        img = img.convert("RGB")
         buffer = io.BytesIO()
-        img.save(buffer, format="WEBP", quality=80)
+        img.save(buffer, format="WEBP", quality=conf.image_quality)
         optimized_image = buffer.getvalue()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -160,15 +162,45 @@ async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_
 
     logger.debug(f"🧠 Appel de l'IA pour {file.filename}...")
     try:
-        result = await agent.run([
-            f"Voici l'état actuel de ma mémoire :\n{knowledge_context}\n\nAnalyse cette image.",
-            BinaryContent(data=optimized_image, media_type='image/webp')
-        ])
+        prompt_text = f"Voici l'état actuel de ma mémoire :\n{knowledge_context}\n\nAnalyse cette image."
+        
+        # --- MODE DRY_RUN ---
+        is_dry_run = app_settings.settings.dry_run
+        if is_dry_run:
+            # Estimation (1 texte token ≈ 4 chars) + 1000 tokens fixes pour le poids de l'image (Gemini/Ollama)
+            estimated_tokens = (len(SYSTEM_PROMPT) + len(prompt_text)) // 4 + 1000
+            logger.warning(f"🛑 [DRY RUN ACTIF] Appel IA annulé pour {file.filename}.")
+            logger.info("="*50)
+            logger.info(f"🧠 PROMPT SYSTÈME :\n{SYSTEM_PROMPT}")
+            logger.info("-" * 50)
+            logger.info(f"👤 PROMPT UTILISATEUR :\n{prompt_text}")
+            logger.info("="*50)
+            logger.warning(f"💰 COÛT ESTIMÉ POUR CE CALL : ~{estimated_tokens} tokens.")
+            return {
+                "status": "ignored", 
+                "reasoning": f"[DRY RUN] Coût estimé : {estimated_tokens} tokens. Le prompt exact a été affiché dans les logs du backend. L'appel IA n'a pas été exécuté."
+            }
+        
+        agent = get_agent()
+        result = await agent.run(
+            [
+                prompt_text,
+                BinaryContent(data=optimized_image, media_type='image/webp')
+            ],
+            model_settings={'temperature': app_settings.settings.temperature}
+        )
 
         # 🌟 UTILISATION DU PARSEUR DE GITDOCK
         raw_text = extract_text_from_result(result)
-        ai_data = parse_ai_response(raw_text)
-        logger.info(f"✅ Analyse réussie pour {file.filename}. Action : {ai_data.action}")
+        try:
+            ai_data = parse_ai_response(raw_text)
+            logger.info(f"✅ Analyse réussie pour {file.filename}. Action : {ai_data.action}")
+        except json.JSONDecodeError:
+            logger.error(f"❌ Hallucination JSON de l'IA (JSONDecodeError). Texte brut :\n{raw_text}")
+            raise HTTPException(
+                status_code=503, 
+                detail="Le Moteur IA a produit un format de réponse invalide (Hallucination JSON). Veuillez réessayer cette image."
+            )
 
         if ai_data.action == "ignore":
             return {"status": "ignored", "reasoning": ai_data.reasoning, "message": "Bruit."}
@@ -215,22 +247,45 @@ async def process_batch_background():
             filename = os.path.basename(image_path)
             logger.debug(f"⚙️ Traitement de {filename}...")
             try:
+                conf = app_settings.settings
                 with open(image_path, "rb") as f:
                     image_bytes = f.read()
                 img = Image.open(io.BytesIO(image_bytes))
-                img.thumbnail((1200, 1200))
+                img.thumbnail((conf.image_resolution, conf.image_resolution))
+                img = img.convert("RGB")
                 buffer = io.BytesIO()
-                img.save(buffer, format="WEBP", quality=80)
+                img.save(buffer, format="WEBP", quality=conf.image_quality)
                 optimized_image = buffer.getvalue()
 
-                result = await agent.run([
-                    f"Voici l'état actuel de ma mémoire :\n{knowledge_context}\n\nAnalyse cette image.",
-                    BinaryContent(data=optimized_image, media_type='image/webp')
-                ])
+                prompt_text = f"Voici l'état actuel de ma mémoire :\n{knowledge_context}\n\nAnalyse cette image."
+
+                # --- MODE DRY_RUN ---
+                is_dry_run = app_settings.settings.dry_run
+                if is_dry_run:
+                    estimated_tokens = (len(SYSTEM_PROMPT) + len(prompt_text)) // 4 + 1000
+                    logger.warning(f"🛑 [DRY RUN ACTIF] {filename} bypassée.")
+                    logger.info("="*50)
+                    logger.info(f"👤 PROMPT UTILISATEUR ENVOYÉ NORMALEMENT : \n{prompt_text}")
+                    logger.info("="*50)
+                    logger.warning(f"💰 COÛT ESTIMÉ : ~{estimated_tokens} tokens. (Fichier conservé dans l'inbox).")
+                    continue  # Ne déplace pas le fichier, passe au suivant.
+
+                agent = get_agent()
+                result = await agent.run(
+                    [
+                        prompt_text,
+                        BinaryContent(data=optimized_image, media_type='image/webp')
+                    ],
+                    model_settings={'temperature': app_settings.settings.temperature}
+                )
 
                 # 🌟 UTILISATION DU PARSEUR DE GITDOCK
                 raw_text = extract_text_from_result(result)
-                ai_data = parse_ai_response(raw_text)
+                try:
+                    ai_data = parse_ai_response(raw_text)
+                except json.JSONDecodeError:
+                    logger.error(f"❌ Hallucination JSON sur le fichier {filename}. Parse impossible. Fichier laissé dans l'inbox pour le prochain retry.")
+                    continue  # Laisse le fichier dans l'inbox et passe au suivant
 
                 if ai_data.action == "ignore":
                     shutil.move(image_path, os.path.join(trash_path, os.path.basename(image_path)))
@@ -253,6 +308,35 @@ async def process_batch_background():
     finally:
         db.close()
 
+
+@app.post("/api/upload/inbox")
+async def upload_to_inbox(files: list[UploadFile] = File(...)):
+    logger.info(f"📥 Réception d'un upload batch : {len(files)} fichiers.")
+    inbox_path = "/app/data/inbox"
+    os.makedirs(inbox_path, exist_ok=True)
+    
+    uploaded_files = []
+    for file in files:
+        if file.content_type.startswith("image/"):
+            # Sécurité de base sur le nom
+            safe_filename = os.path.basename(file.filename)
+            file_path = os.path.join(inbox_path, safe_filename)
+            try:
+                # Écriture directe sur le disque
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                uploaded_files.append(safe_filename)
+                logger.debug(f"✅ Fichier sauvegardé dans l'inbox : {safe_filename}")
+            except Exception as e:
+                logger.error(f"❌ Erreur sauvegarde {safe_filename}: {str(e)}")
+        else:
+            logger.warning(f"⚠️ Fichier ignoré (non-image) : {file.filename}")
+
+    return {
+        "status": "success", 
+        "message": f"{len(uploaded_files)} images téléchargées dans l'inbox pour le traitement par lots.",
+        "files": uploaded_files
+    }
 
 @app.post("/api/analyze/batch")
 async def trigger_batch_analysis(background_tasks: BackgroundTasks):
@@ -311,6 +395,16 @@ def reject_proposal(prop_id: int, db: Session = Depends(get_db)):
         proposition.status = "rejected"
         db.commit()
     return {"status": "rejected"}
+
+
+@app.get("/api/settings")
+def get_settings():
+    return app_settings.get_all()
+
+@app.post("/api/settings")
+def update_settings(payload: dict = Body(...)):
+    app_settings.update(payload)
+    return {"status": "success", "settings": app_settings.get_all()}
 
 
 @app.get("/health")

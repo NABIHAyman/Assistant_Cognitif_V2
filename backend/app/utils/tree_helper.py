@@ -36,7 +36,7 @@ def get_knowledge_context(base_path: str) -> str:
         folder_name = os.path.basename(root)
 
         if folder_name and folder_name != os.path.basename(base_path):
-            tree_str += f"{indent}📂 {folder_name}/\n"
+            tree_str += f"{indent}- [Dossier] {folder_name}/\n"
 
         subindent = '  ' * (level + 1)
         for f in files:
@@ -48,7 +48,7 @@ def get_knowledge_context(base_path: str) -> str:
                 rel_path = os.path.join(rel_dir, f).replace("\\", "/") if rel_dir != "." else f
 
                 # On montre le chemin complet à l'IA pour qu'elle puisse le copier-coller dans 'target_file'
-                tree_str += f"{subindent}📄 {rel_path}\n"
+                tree_str += f"{subindent}- {rel_path}\n"
 
     if not tree_str.strip():
         tree_str = "Aucun fichier existant."
