@@ -33,6 +33,23 @@
         </div>
       </div>
 
+      <!-- ICÔNE DE NOTIFICATION BATCH (Bottom-right) -->
+      <div v-if="batchNotification.show" 
+           class="fixed bottom-4 right-4 z-50 animate-pulse">
+        <div class="relative">
+          <div class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+            {{ batchNotification.count }}
+          </div>
+          <button @click="goToProposals" 
+                  class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <!-- PANEL LATÉRAL DES PARAMÈTRES (Slide-Over) -->
       <div v-if="isSettingsOpen" class="fixed inset-0 z-[60] flex justify-end">
         <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" @click="closeSettings"></div>
@@ -192,7 +209,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const isSettingsOpen = ref(false)
 const settingsForm = ref({
@@ -237,8 +254,47 @@ const saveSettings = async () => {
   }
 }
 
+const initWebSocket = () => {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws/batch-status`
+  
+  websocket.value = new WebSocket(wsUrl)
+  
+  websocket.value.onopen = () => {
+    console.log('WebSocket connecté pour les notifications batch')
+  }
+  
+  websocket.value.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.type === 'BATCH_COMPLETED') {
+        batchNotification.value.show = true
+        batchNotification.value.count = data.count
+        showNotification("Batch Terminé", data.message, "success")
+      }
+    } catch (e) {
+      console.error('Erreur parsing notification WS:', e)
+    }
+  }
+  
+  websocket.value.onclose = () => {
+    setTimeout(initWebSocket, 3000)
+  }
+  
+  websocket.value.onerror = (error) => {
+    console.error('WebSocket error:', error)
+  }
+}
+
 onMounted(() => {
   loadSettings()
+  initWebSocket()
+})
+
+onUnmounted(() => {
+  if (websocket.value) {
+    websocket.value.close()
+  }
 })
 
 const fileInput = ref(null)
@@ -251,6 +307,8 @@ const previewUrl = ref(null)
 const errorMsg = ref(null)
 
 const notification = ref({ show: false, type: 'success', title: '', message: '' })
+const batchNotification = ref({ show: false, count: 0 })
+const websocket = ref(null)
 
 const showNotification = (title, message, type = 'success') => {
   notification.value = { show: true, type, title, message }
@@ -400,5 +458,10 @@ const reset = () => {
   proposal.value = null
   previewUrl.value = null
   if (fileInput.value) fileInput.value.value = ""
+}
+
+const goToProposals = () => {
+  window.location.href = '/proposals'
+  batchNotification.value.show = false
 }
 </script>

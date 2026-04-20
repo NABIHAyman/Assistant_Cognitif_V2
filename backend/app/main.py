@@ -5,7 +5,7 @@ import glob
 import shutil
 import json
 from PIL import Image
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, BackgroundTasks, Body, Request
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, BackgroundTasks, Body, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
@@ -31,6 +31,29 @@ from loguru import logger  # <--- AJOUTER
 import sys
 
 app = FastAPI(title="Cognition Web API", version="2.0")
+
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections[:]:  # Copy list to avoid modification during iteration
+            try:
+                await connection.send_text(message)
+            except:
+                # Connection fermée, on la retire
+                self.active_connections.remove(connection)
+
+manager = ConnectionManager()
 
 
 # 1. Configuration de Loguru (Console + Fichier qui ne sature pas le disque)
@@ -240,6 +263,7 @@ async def process_batch_background():
     logger.info(f"📁 {len(image_files)} images détectées dans l'inbox.")
 
     db = SessionLocal()
+    processed_count = 0
     try:
         base_path = "/app/data/knowledge-base"
         knowledge_context = get_knowledge_context(base_path)
@@ -301,12 +325,24 @@ async def process_batch_background():
                 )
                 db.add(nouvelle_proposition)
                 db.commit()
+                processed_count += 1
                 shutil.move(image_path, os.path.join(archive_path, os.path.basename(image_path)))
             except Exception as e:
                 logger.error(f"❌ Erreur critique sur {image_path}")
                 logger.exception(e)  # Logge toute la stack trace d'erreur
     finally:
         db.close()
+        
+    # NOTIFICATION FRONTEND
+    if processed_count > 0:
+        import json
+        import asyncio
+        notification = {
+            "type": "BATCH_COMPLETED",
+            "count": processed_count,
+            "message": f"{processed_count} nouvelles propositions générées"
+        }
+        asyncio.create_task(manager.broadcast(json.dumps(notification)))
 
 
 @app.post("/api/upload/inbox")
@@ -342,6 +378,15 @@ async def upload_to_inbox(files: list[UploadFile] = File(...)):
 async def trigger_batch_analysis(background_tasks: BackgroundTasks):
     background_tasks.add_task(process_batch_background)
     return {"status": "success", "message": "Batch lancé en arrière-plan."}
+
+@app.websocket("/ws/batch-status")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()  # Keep connection alive
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 
 @app.get("/api/proposals")
