@@ -17,7 +17,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 # 🛡️ LE BOUCLIER ANTI-PROXY (Inspiré de GitDock)
 os.environ["HTTP_PROXY"] = ""
 os.environ["HTTPS_PROXY"] = ""
-os.environ["NO_PROXY"] = "127.0.0.1,localhost,100.89.63.25,host.docker.internal,*"
+os.environ["NO_PROXY"] = "127.0.0.1,localhost,host.docker.internal,*"
 
 # Imports internes
 from app.models import Proposition, get_db, SessionLocal

@@ -9,8 +9,8 @@ services:
       dockerfile: Dockerfile
     container_name: cognitif_frontend
     ports:
-      # FIX : On passe sur le port 3333 pour ne pas crasher wexia-frontend (3000)
-      - "3333:80"
+      # Port hôte configurable (FRONTEND_PORT dans .env), 3333 par défaut
+      - "${FRONTEND_PORT:-3333}:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -27,8 +27,8 @@ services:
       dockerfile: Dockerfile
     container_name: cognitif_backend
     ports:
-      # FIX : On passe sur le port 8020 pour ne pas crasher supabase-kong (8000)
-      - "8020:8000"
+      # Port hôte configurable (BACKEND_PORT dans .env), 8020 par défaut
+      - "${BACKEND_PORT:-8020}:8000"
     volumes:
       - ./data:/app/data
     env_file:
@@ -55,8 +55,8 @@ services:
       dockerfile: Dockerfile
     container_name: cognitif_mcp
     ports:
-      # FIX : On passe sur le port 8021 pour ne pas crasher les API gateways
-      - "8021:8000"
+      # Port hôte configurable (MCP_PORT dans .env), 8021 par défaut
+      - "${MCP_PORT:-8021}:8000"
     env_file:
       - .env
     restart: unless-stopped

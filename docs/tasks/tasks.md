@@ -2,10 +2,6 @@
 
 Suite à l'analyse complète de l'architecture et des documents de conception actuels du projet Cognitif V2, voici l'état des lieux des développements futurs.
 
-> **Réponse à votre question :**
-> Non, l'**analyse des images en batch ne fait pas partie des tâches prioritaires restantes car elle est DÉJÀ implémentée.** 
-> FastAPI gère déjà cette fonctionnalité en arrière-plan (via `BackgroundTasks` et la fonction `process_batch_background()`) sur la route `@app.post("/api/analyze/batch")` dans `backend/app/main.py`.
-
 ---
 
 ## 🔝 Top 3 des tâches les plus importantes à réaliser

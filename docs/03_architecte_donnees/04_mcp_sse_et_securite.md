@@ -29,7 +29,7 @@ Ton conteneur MCP (l'architecte des données finales) reste dissimulé au fond d
 
 ## 3. La Promesse MCP
 En annotant la fonction Notion avec `@mcp.tool()`, tu crées ce qu'on appelle une interface standardisée.
-Demain, si tu souhaites faire fonctionner ce même transfert Notion depuis Claude Desktop, Cursor, ou un tout autre Agent (plutôt que ton projet Cognitif), ce conteneur `mcp-server` n'a pas besoin de la moindre modification. Il est auto-descriptif et respecte le standard Anthropic.
+Demain, si tu souhaites faire fonctionner ce même transfert Notion depuis un autre client MCP (un IDE, un assistant de bureau ou un tout autre agent, plutôt que ton projet Cognitif), ce conteneur `mcp-server` n'a pas besoin de la moindre modification. Il est auto-descriptif et respecte le standard MCP (Model Context Protocol).
 
 ---
 **💡 Le Bilan d'Expert :**

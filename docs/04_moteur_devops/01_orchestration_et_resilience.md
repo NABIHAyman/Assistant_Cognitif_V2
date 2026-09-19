@@ -12,7 +12,7 @@ Ton `docker-compose.yml` est le plan de la ville :
 - C'est ce réseau qui permet au backend d'appeler `http://cognitif_mcp:8000` (le nom de la maison, sans avoir à connaître son IP).
 
 ## 2. Éviter les Embouteillages (Ports)
-Sur une machine où tu fais beaucoup de développement (comme ton ordinateur où il y a eu Wexia, GitDock, Supabase...), tout le monde veut des ports connus (3000, 8000).
+Sur une machine où tu fais beaucoup de développement (où tournent déjà d'autres projets), tout le monde veut des ports connus (3000, 8000).
 Tu as géré ce casse-tête avec brio : 
 - Le Frontend map son port interne sur le `3333` public.
 - Le Backend sur le `8020`.

@@ -50,5 +50,5 @@ def upsert_notion_page(metadata: NotionPageMetadata) -> str:
 if __name__ == "__main__":
     # Lancement du serveur sur le port exposé dans le docker-compose
     # mcp.run(transport="stdio")
-    # Fix Claude : On passe de 'stdio' à 'sse' et on écoute sur toutes les interfaces (0.0.0.0)
+    # Fix : On passe de 'stdio' à 'sse' et on écoute sur toutes les interfaces (0.0.0.0)
     mcp.run(transport="sse", host="0.0.0.0", port=8000)
