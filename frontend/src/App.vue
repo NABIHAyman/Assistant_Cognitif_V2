@@ -287,7 +287,7 @@ const closeSettings = () => { isSettingsOpen.value = false; }
 
 const loadSettings = async () => {
   try {
-    const res = await fetch('/api/v2/settings')
+    const res = await fetch('/api/settings')
     if (res.ok) {
       settingsForm.value = await res.json()
     }
@@ -298,7 +298,7 @@ const loadSettings = async () => {
 
 const saveSettings = async () => {
   try {
-    const res = await fetch('/api/v2/settings', {
+    const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settingsForm.value)
@@ -353,7 +353,7 @@ const isFetchingProposals = ref(false)
 const fetchProposals = async () => {
   isFetchingProposals.value = true
   try {
-    const res = await fetch('/api/v2/proposals')
+    const res = await fetch('/api/proposals')
     if (res.ok) {
       const data = await res.json()
       pendingProposals.value = data.proposals || []
@@ -459,7 +459,7 @@ const processBatchFiles = async (filesList) => {
   files.forEach(f => formData.append('files', f))
 
   try {
-    const uploadRes = await fetch('/api/v2/upload/inbox', {
+    const uploadRes = await fetch('/api/upload/inbox', {
       method: 'POST',
       body: formData
     })
@@ -468,7 +468,7 @@ const processBatchFiles = async (filesList) => {
 
     if (result.status === "success") {
       batchMsg.value = `Lancement du traitement IA par lots en arrière-plan...`
-      await fetch('/api/v2/analyze/batch', { method: 'POST' })
+      await fetch('/api/analyze/batch', { method: 'POST' })
       showNotification("Batch Démarré", `Succès ! ${files.length} images envoyées à l'inbox. Le système IA les traite en tâche de fond.`, "success")
     } else {
       throw new Error(result.detail || "Erreur inconnue lors de l'upload.")
@@ -491,7 +491,7 @@ const processFile = async (file) => {
   formData.append('file', file)
 
   try {
-    const response = await fetch('/api/v2/analyze', {
+    const response = await fetch('/api/analyze', {
       method: 'POST',
       body: formData
     })
@@ -530,7 +530,7 @@ const publish = async () => {
       markdown_content: proposal.value.markdown_content
     }
 
-    const response = await fetch(`/api/v2/publish/${proposal.value.id}`, {
+    const response = await fetch(`/api/publish/${proposal.value.id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -548,7 +548,7 @@ const publish = async () => {
 }
 
 const reject = () => {
-  fetch(`/api/v2/reject/${proposal.value.id}`, { method: 'POST' })
+  fetch(`/api/reject/${proposal.value.id}`, { method: 'POST' })
   reset()
 }
 

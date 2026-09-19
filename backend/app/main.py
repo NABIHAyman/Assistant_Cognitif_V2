@@ -151,7 +151,7 @@ def get_agent():
     """Génère l'Agent IA dynamiquement en fonction des paramètres "à chaud"."""
     conf = app_settings.settings
     if conf.llm_provider == "gemini":
-        return Agent('gemini-2.5-flash-lite', system_prompt=SYSTEM_PROMPT)
+        return Agent('google-gla:gemini-2.5-flash-lite', system_prompt=SYSTEM_PROMPT)
     else:
         provider = OpenAIProvider(base_url=f"{conf.ollama_host}/v1", api_key="ollama-local")
         return Agent(OpenAIChatModel(conf.ollama_model, provider=provider), system_prompt=SYSTEM_PROMPT)
