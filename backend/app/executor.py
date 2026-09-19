@@ -102,4 +102,4 @@ async def _call_mcp_notion(proposition: Proposition) -> dict:
             return {"notion_status": "success", "detail": str(result)}
 
     except Exception as e:
-        return {"notion_status": "warning", "detail": f"MCP injoignable: {str(e)}"}
+        return {"notion_status": "warning", "detail": f"Publication Notion non effectuée : {str(e)}"}

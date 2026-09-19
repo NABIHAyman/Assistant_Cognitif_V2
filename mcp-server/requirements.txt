@@ -1,3 +1,4 @@
 # mcp-server/requirements.txt
-fastmcp>=0.1.0            # L'équivalent de FastAPI pour les outils IA
+fastmcp>=2.0.0            # L'équivalent de FastAPI pour les outils IA
+notion-client>=3.1.0      # SDK officiel Notion (contenu Markdown, data sources)
 pydantic>=2.7.0
