@@ -180,7 +180,7 @@ local ne supporte pas plusieurs inférences simultanées sans saturer la VRAM.
 | Ollama | installé **sur la machine hôte**, avec un modèle de vision |
 | Modèle de vision | `gemma4:e4b` par défaut (modifiable via `OLLAMA_MODEL`) |
 | Clé API Gemini | seulement pour le mode `gemini` |
-| Intégration et base Notion | pour la publication Notion (voir [Relier Notion](#relier-notion)) ; sans elles, les fiches restent écrites en local |
+| Intégration et base Notion | pour la publication Notion ; la base se crée avec un script ou un prompt Notion AI (voir [Relier Notion](#relier-notion)). Sans elles, les fiches restent écrites en local |
 
 Images utilisées par les Dockerfiles : `python:3.11-slim` (backend,
 mcp-server), `node:22-alpine` puis `nginx:alpine` (frontend, build
@@ -296,14 +296,50 @@ data/
 
 ### Relier Notion
 
-1. Créer une intégration interne sur <https://www.notion.so/profile/integrations>
-   et copier sa clé dans `NOTION_API_KEY`.
-2. Créer une base (par exemple « Cognition Memory ») avec une propriété titre,
-   et éventuellement `Tags` (multi-sélection) et `Status` (sélection).
-3. Partager la base avec l'intégration (menu « ⋯ » › *Connections*).
-4. Copier l'ID de la base, les 32 caractères de son URL, dans
-   `NOTION_DATABASE_ID`, puis redémarrer le service :
-   `docker compose restart mcp-server`.
+La base Notion attendue, « 🧠 Cognition Memory », est décrite une seule fois
+dans [`notion/cognition_memory.schema.json`](notion/cognition_memory.schema.json) :
+une propriété titre `Title`, `Tags` (multi-sélection, 34 options) et `Status`
+(sélection, option `Approved`), avec les vues *Table*, *Cards* et *Reading list*.
+
+**Avant tout :** créer une intégration interne sur
+<https://www.notion.so/profile/integrations> et copier sa clé dans
+`NOTION_API_KEY` (fichier `.env`).
+
+#### Méthode 1 — script (recommandée)
+
+Le script crée la base, ses propriétés et ses vues, puis affiche son ID.
+
+1. Dans Notion, choisir la page qui accueillera la base et la partager avec
+   l'intégration (menu « ⋯ » › *Connections*).
+2. Lancer le script avec l'URL ou l'ID de cette page :
+
+   ```bash
+   pip install "notion-client>=3.1.0"
+   python notion/create_notion_database.py --parent <URL_OU_ID_DE_LA_PAGE> --write-env
+   ```
+
+   `--write-env` inscrit directement `NOTION_DATABASE_ID` dans le `.env`
+   (Python 3.10 ou plus). Sans Python sur l'hôte, le conteneur du connecteur
+   contient déjà le SDK ; copier alors l'ID affiché dans le `.env` :
+
+   ```bash
+   docker compose run --rm -v "$(pwd)/notion:/app/notion" mcp-server python notion/create_notion_database.py --parent <URL_OU_ID_DE_LA_PAGE>
+   ```
+
+3. Redémarrer le connecteur : `docker compose restart mcp-server`.
+
+#### Méthode 2 — prompt Notion AI (sans code)
+
+Coller le prompt de [`notion/notion-ai-prompt.md`](notion/notion-ai-prompt.md)
+dans Notion AI, vérifier le résultat avec la liste fournie, partager la base
+avec l'intégration, puis renseigner `NOTION_DATABASE_ID` (les 32 caractères de
+l'URL de la base).
+
+#### Méthode 3 — à la main
+
+Créer une base pleine page avec au minimum une propriété titre, puis la partager
+avec l'intégration. Le connecteur lit le schéma réel : `Tags` et `Status` sont
+utilisés s'ils existent, sinon la page est créée avec son seul titre.
 
 À chaque « Publier », la réponse de l'API contient `notion.notion_status`
 (`success` avec l'URL de la page, ou `warning` avec la raison).
@@ -342,6 +378,10 @@ le réseau Docker, pas seulement sur `127.0.0.1`.
 │   ├── Dockerfile             # build Node puis image Nginx
 │   ├── nginx.conf             # fichiers statiques + reverse proxy /api et /ws
 │   └── src/App.vue            # dépôt, lots, propositions, revue, paramètres
+├── notion/                    # création de la base Notion « Cognition Memory »
+│   ├── cognition_memory.schema.json  # structure de référence (propriétés, options, vues)
+│   ├── create_notion_database.py     # script de création via l'API Notion
+│   └── notion-ai-prompt.md           # alternative : prompt pour Notion AI
 ├── mcp-server/                # connecteur Notion (FastMCP, SSE)
 │   ├── Dockerfile
 │   └── server.py              # outil upsert_notion_page : crée la page dans la base Notion
