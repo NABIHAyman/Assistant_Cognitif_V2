@@ -135,6 +135,11 @@ FastMCP, exposé en SSE sur le port interne 8000. Il publie un outil,
 (`http://cognitif_mcp:8000/sse`). L'intégration Notion est ainsi isolée dans
 son propre service, réutilisable par tout client MCP.
 
+**Moindre privilège.** Les secrets Notion vivent dans `mcp-server/.env`, chargé
+par ce seul conteneur. Le backend, qui reçoit les images et expose l'API, n'a
+jamais la clé Notion ; le connecteur, lui, n'a pas la clé Gemini. Une
+compromission du backend ne donne donc pas accès à l'espace Notion.
+
 L'outil crée une page par fiche validée avec le SDK officiel `notion-client` :
 
 - **Schéma lu, pas supposé.** Au premier appel, il récupère le *data source* de
@@ -201,9 +206,10 @@ cd Assistant_Cognitif_V2
 # 2. Préparer le modèle de vision sur l'hôte
 ollama pull gemma4:e4b
 
-# 3. Créer la configuration
+# 3. Créer la configuration (deux fichiers : backend, et secrets Notion à part)
 cp .env.example .env
-#    (ajuster les ports ou le modèle si besoin)
+cp mcp-server/.env.example mcp-server/.env
+#    (ajuster les ports ou le modèle si besoin ; clés Notion dans mcp-server/.env)
 
 # 4. Construire et lancer les trois services
 docker compose up -d --build
@@ -251,8 +257,12 @@ backend et du serveur MCP servent au diagnostic.
 
 ### Variables d'environnement
 
-Un seul fichier `.env` à la racine, lu par Docker Compose (ports) et chargé
-dans `backend` et `mcp-server` (`env_file`). Modèle : `.env.example`.
+Deux fichiers, pour que chaque conteneur ne reçoive que ses propres secrets :
+
+- `.env` à la racine : lu par Docker Compose (ports) et chargé dans `backend`.
+  Modèle : `.env.example`.
+- `mcp-server/.env` : les variables Notion, chargées **uniquement** dans
+  `mcp-server`. Modèle : `mcp-server/.env.example`.
 
 | Variable | Service | Rôle |
 |---|---|---|
@@ -263,8 +273,8 @@ dans `backend` et `mcp-server` (`env_file`). Modèle : `.env.example`.
 | `GOOGLE_API_KEY` | backend | Clé Gemini (mode `gemini` seulement ; `GEMINI_API_KEY` accepté) |
 | `IMAGE_RESOLUTION`, `IMAGE_QUALITY` | backend | Réduction et compression WebP |
 | `DRY_RUN` | backend | Simulation sans appel IA |
-| `NOTION_API_KEY`, `NOTION_DATABASE_ID` | mcp-server | Clé de l'intégration Notion, ID de la base |
-| `NOTION_TAGS_PROPERTY`, `NOTION_STATUS_PROPERTY`, `NOTION_STATUS_VALUE` | mcp-server | Facultatif : noms des propriétés (défauts `Tags`, `Status`, `Approved`) |
+| `NOTION_API_KEY`, `NOTION_DATABASE_ID` | mcp-server (`mcp-server/.env`) | Clé de l'intégration Notion, ID de la base |
+| `NOTION_TAGS_PROPERTY`, `NOTION_STATUS_PROPERTY`, `NOTION_STATUS_VALUE` | mcp-server (`mcp-server/.env`) | Facultatif : noms des propriétés (défauts `Tags`, `Status`, `Approved`) |
 
 `OLLAMA_HOST` est fixé dans `docker-compose.yml`
 (`http://host.docker.internal:11434`).
@@ -303,7 +313,7 @@ une propriété titre `Title`, `Tags` (multi-sélection, 34 options) et `Status`
 
 **Avant tout :** créer une intégration interne sur
 <https://www.notion.so/profile/integrations> et copier sa clé dans
-`NOTION_API_KEY` (fichier `.env`).
+`NOTION_API_KEY`, dans `mcp-server/.env`.
 
 #### Méthode 1 — script (recommandée)
 
@@ -318,9 +328,9 @@ Le script crée la base, ses propriétés et ses vues, puis affiche son ID.
    python notion/create_notion_database.py --parent <URL_OU_ID_DE_LA_PAGE> --write-env
    ```
 
-   `--write-env` inscrit directement `NOTION_DATABASE_ID` dans le `.env`
+   `--write-env` inscrit directement `NOTION_DATABASE_ID` dans `mcp-server/.env`
    (Python 3.10 ou plus). Sans Python sur l'hôte, le conteneur du connecteur
-   contient déjà le SDK ; copier alors l'ID affiché dans le `.env` :
+   contient déjà le SDK et sa clé ; copier alors l'ID affiché dans `mcp-server/.env` :
 
    ```bash
    docker compose run --rm -v "$(pwd)/notion:/app/notion" mcp-server python notion/create_notion_database.py --parent <URL_OU_ID_DE_LA_PAGE>
@@ -333,7 +343,7 @@ Le script crée la base, ses propriétés et ses vues, puis affiche son ID.
 Coller le prompt de [`notion/notion-ai-prompt.md`](notion/notion-ai-prompt.md)
 dans Notion AI, vérifier le résultat avec la liste fournie, partager la base
 avec l'intégration, puis renseigner `NOTION_DATABASE_ID` (les 32 caractères de
-l'URL de la base).
+l'URL de la base) dans `mcp-server/.env`.
 
 #### Méthode 3 — à la main
 
