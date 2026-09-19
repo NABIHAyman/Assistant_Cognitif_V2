@@ -1,6 +1,6 @@
 # 🧠 Assistant Cognitif V2
 
-Application web qui transforme des captures d'écran en base de connaissances
+Application web qui transforme le cimetières des captures d'écran (on en a tous un dans notre smartphone) en base de connaissances
 structurée. Un modèle de vision local (VLM) analyse chaque image et propose une
 fiche typée, suivie en base SQLite jusqu'à sa validation humaine. Une fois
 validée, elle est classée par domaine dans une base Markdown et publiée dans
