@@ -427,6 +427,12 @@ l'arborescence brute, et une migration vers PostgreSQL.
 
 ---
 
+## Licence
+
+Distribué sous licence [MIT](LICENSE) — © 2026 Ayman NABIH.
+
+---
+
 ## Auteur
 
 **Ayman NABIH**
