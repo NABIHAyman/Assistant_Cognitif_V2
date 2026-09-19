@@ -1,0 +1,61 @@
+{
+  "database_name": "Cognition Memory",
+  "icon": "🧠",
+  "properties": {
+    "Title": { "type": "title" },
+    "Tags": {
+      "type": "multi_select",
+      "options": [
+        "inspiration_visuelle",
+        "contexte_humain",
+        "design_narratif",
+        "design_patterns",
+        "résilience",
+        "microservices",
+        "architecture",
+        "film",
+        "davidlynch",
+        "mystère",
+        "cinema",
+        "art",
+        "peinture",
+        "reference_inspiration",
+        "a_classifier",
+        "contexte_industrie",
+        "evenement",
+        "série",
+        "crime",
+        "télévision",
+        "recommendation",
+        "bigdata",
+        "scalabilite",
+        "databases",
+        "designpatterns",
+        "algorithmes",
+        "structures_de_donnees",
+        "entretien_technique",
+        "recrutement",
+        "software_engineering",
+        "structures_de_données",
+        "philosophie",
+        "existentialisme",
+        "réflexion_personnelle"
+      ]
+    },
+    "Status": {
+      "type": "select",
+      "options": ["Approved"]
+    }
+  },
+  "views": [
+    { "name": "Table", "type": "table", "properties": ["Title", "Tags", "Status"] },
+    {
+      "name": "Cards",
+      "type": "gallery",
+      "properties": ["Title", "Tags", "Status"],
+      "cover": "page_content",
+      "cover_size": "large"
+    },
+    { "name": "Reading list", "type": "list", "properties": ["Title", "Tags", "Status"] }
+  ]
+}
