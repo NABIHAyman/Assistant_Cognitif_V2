@@ -3,8 +3,8 @@
 Application web qui transforme des captures d'écran en base de connaissances
 structurée. Un modèle de vision local (VLM) analyse chaque image et propose une
 fiche typée, suivie en base SQLite jusqu'à sa validation humaine. Une fois
-validée, elle est classée par domaine dans une base Markdown. Un connecteur MCP
-se charge de la publication vers Notion.
+validée, elle est classée par domaine dans une base Markdown et publiée dans
+une base Notion par un connecteur MCP.
 
 ![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
@@ -46,8 +46,7 @@ Gemini) sous la forme d'une application web conteneurisée :
 - les images peuvent être envoyées **par lots**, traitées en arrière-plan, avec
   une notification WebSocket en fin de lot ;
 - la publication appelle un **connecteur MCP** qui crée la fiche dans une base
-  Notion (écriture réelle pas encore intégrée à ce dépôt, voir
-  [Statut](#statut-et-limites-connues)).
+  **Notion** : titre, tags, statut et contenu Markdown.
 
 ### Principe : le modèle lit, le code décide
 
@@ -77,7 +76,7 @@ flowchart LR
     B --> DB[("SQLite<br/>propositions")]
     B --> KB[("data/knowledge-base<br/>fichiers Markdown")]
     B -->|"MCP / SSE"| M["mcp-server<br/>FastMCP"]
-    M -.->|"fiche"| NO["Notion"]
+    M -->|"page Markdown"| NO[("Notion<br/>base Cognition Memory")]
 ```
 
 ### Flux d'une capture
@@ -90,6 +89,7 @@ sequenceDiagram
     participant V as VLM (Ollama)
     participant K as Base Markdown
     participant M as mcp-server
+    participant N as Notion
     U->>F: dépose une capture
     F->>B: POST /api/analyze
     B->>B: redimensionne + WebP, lit l'arborescence et la taxonomie
@@ -101,6 +101,8 @@ sequenceDiagram
     F->>B: POST /api/publish/{id}
     B->>K: crée ou complète le fichier .md, met à jour _meta/domains.json
     B->>M: outil upsert_notion_page
+    M->>N: crée la page (propriétés + Markdown)
+    N-->>M: URL de la page
     M-->>B: résultat
 ```
 
@@ -131,10 +133,20 @@ FastMCP, exposé en SSE sur le port interne 8000. Il publie un outil,
 `upsert_notion_page`, dont l'entrée est typée (`title`, `tags`,
 `markdown_content`). Le backend l'appelle avec le client MCP de FastMCP
 (`http://cognitif_mcp:8000/sse`). L'intégration Notion est ainsi isolée dans
-son propre service, réutilisable par tout client MCP. La création de la page
-Notion (titre, tags, statut « Approved », contenu Markdown) est implémentée,
-mais **pas encore intégrée à ce dépôt** : dans cette version, l'outil vérifie
-la présence des clés, journalise et renvoie un succès simulé.
+son propre service, réutilisable par tout client MCP.
+
+L'outil crée une page par fiche validée avec le SDK officiel `notion-client` :
+
+- **Schéma lu, pas supposé.** Au premier appel, il récupère le *data source* de
+  la base et le type de chaque propriété : le titre est trouvé quel que soit son
+  nom ; `Tags` (multi-sélection) et `Status` (sélection ou statut, valeur
+  `Approved`) ne sont renseignés que s'ils existent.
+- **Contenu en Markdown natif.** Le corps de la fiche est envoyé tel quel dans le
+  champ `markdown` de l'API (version `2026-03-11`) : titres, listes et blocs de
+  code deviennent des blocs Notion.
+- **Erreurs explicites.** Un refus de Notion ou des clés absentes remontent au
+  backend comme une erreur MCP ; la fiche reste écrite en local et la réponse
+  de publication le signale (`notion_status: warning`).
 
 ---
 
@@ -148,6 +160,7 @@ la présence des clés, journalise et renvoie un succès simulé.
 | Tableau des propositions en attente | `GET /api/proposals`, page `/proposals` |
 | Revue et correction (titre, domaine, action, tags, fichier cible, contenu) | page de revue |
 | Publication ou rejet | `POST /api/publish/{id}`, `POST /api/reject/{id}` |
+| Publication de chaque fiche validée dans une base Notion (titre, tags, statut, contenu Markdown) | connecteur MCP `upsert_notion_page` |
 | Paramètres modifiables à chaud (fournisseur, modèle, température, DRY_RUN, résolution, qualité) | `GET/POST /api/settings`, panneau « Paramètres Moteur » |
 | Mode DRY_RUN : aucun appel IA, prompt complet et estimation de tokens dans les logs | paramètre `DRY_RUN` |
 | Images triées après un lot : `archive/` (proposition créée) ou `trash/` (`ignore`) | `data/` |
@@ -167,7 +180,7 @@ local ne supporte pas plusieurs inférences simultanées sans saturer la VRAM.
 | Ollama | installé **sur la machine hôte**, avec un modèle de vision |
 | Modèle de vision | `gemma4:e4b` par défaut (modifiable via `OLLAMA_MODEL`) |
 | Clé API Gemini | seulement pour le mode `gemini` |
-| Clé et base Notion | facultatives : dans cette version du dépôt, l'écriture Notion est simulée |
+| Intégration et base Notion | pour la publication Notion (voir [Relier Notion](#relier-notion)) ; sans elles, les fiches restent écrites en local |
 
 Images utilisées par les Dockerfiles : `python:3.11-slim` (backend,
 mcp-server), `node:22-alpine` puis `nginx:alpine` (frontend, build
@@ -250,7 +263,8 @@ dans `backend` et `mcp-server` (`env_file`). Modèle : `.env.example`.
 | `GOOGLE_API_KEY` | backend | Clé Gemini (mode `gemini` seulement ; `GEMINI_API_KEY` accepté) |
 | `IMAGE_RESOLUTION`, `IMAGE_QUALITY` | backend | Réduction et compression WebP |
 | `DRY_RUN` | backend | Simulation sans appel IA |
-| `NOTION_API_KEY`, `NOTION_DATABASE_ID` | mcp-server | Accès Notion |
+| `NOTION_API_KEY`, `NOTION_DATABASE_ID` | mcp-server | Clé de l'intégration Notion, ID de la base |
+| `NOTION_TAGS_PROPERTY`, `NOTION_STATUS_PROPERTY`, `NOTION_STATUS_VALUE` | mcp-server | Facultatif : noms des propriétés (défauts `Tags`, `Status`, `Approved`) |
 
 `OLLAMA_HOST` est fixé dans `docker-compose.yml`
 (`http://host.docker.internal:11434`).
@@ -279,6 +293,20 @@ data/
 ```
 
 `data/` est exclu de Git.
+
+### Relier Notion
+
+1. Créer une intégration interne sur <https://www.notion.so/profile/integrations>
+   et copier sa clé dans `NOTION_API_KEY`.
+2. Créer une base (par exemple « Cognition Memory ») avec une propriété titre,
+   et éventuellement `Tags` (multi-sélection) et `Status` (sélection).
+3. Partager la base avec l'intégration (menu « ⋯ » › *Connections*).
+4. Copier l'ID de la base, les 32 caractères de son URL, dans
+   `NOTION_DATABASE_ID`, puis redémarrer le service :
+   `docker compose restart mcp-server`.
+
+À chaque « Publier », la réponse de l'API contient `notion.notion_status`
+(`success` avec l'URL de la page, ou `warning` avec la raison).
 
 ### Reverse proxy
 
@@ -316,7 +344,7 @@ le réseau Docker, pas seulement sur `127.0.0.1`.
 │   └── src/App.vue            # dépôt, lots, propositions, revue, paramètres
 ├── mcp-server/                # connecteur Notion (FastMCP, SSE)
 │   ├── Dockerfile
-│   └── server.py              # outil upsert_notion_page (écriture Notion simulée dans ce dépôt)
+│   └── server.py              # outil upsert_notion_page : crée la page dans la base Notion
 └── docs/                      # notes de conception (français)
     ├── 01_parcours_fonctionnel/
     ├── 02_cerveau_ia/
@@ -333,10 +361,6 @@ le réseau Docker, pas seulement sur `127.0.0.1`.
 
 Projet personnel, développé et utilisé en local. **Jamais mis en production.**
 
-- **Écriture Notion pas encore intégrée à ce dépôt.** Le connecteur MCP est en
-  place (serveur, outil typé, appel depuis le backend) et l'écriture dans Notion
-  est implémentée, mais cette version n'est pas encore versionnée ici : le
-  `server.py` du dépôt renvoie un succès simulé sans rien créer dans Notion.
 - **Pas d'authentification.** L'application est mono-utilisateur ; toute
   personne qui atteint l'API voit et publie les propositions. À n'exposer que
   sur un réseau de confiance.
