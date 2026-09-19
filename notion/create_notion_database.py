@@ -14,7 +14,7 @@ Usage :
   python notion/create_notion_database.py --parent <ID_PAGE> [--write-env]
 
 NOTION_API_KEY et NOTION_PARENT_PAGE_ID peuvent aussi venir de l'environnement
-ou du fichier .env à la racine du projet.
+ou de mcp-server/.env, le fichier de secrets réservé au connecteur MCP.
 """
 import argparse
 import json
@@ -28,7 +28,7 @@ from notion_client.errors import APIResponseError
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_FILE = Path(__file__).resolve().parent / "cognition_memory.schema.json"
-ENV_FILE = ROOT / ".env"
+ENV_FILE = ROOT / "mcp-server" / ".env"  # secrets Notion, isolés du backend
 
 # Version de l'API Notion qui expose les data sources et la création de vues
 NOTION_VERSION = "2026-03-11"
@@ -115,7 +115,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Crée la base Notion « Cognition Memory ».")
     parser.add_argument("--parent", help="ID ou URL de la page Notion qui accueillera la base")
     parser.add_argument("--api-key", help="clé de l'intégration Notion (sinon NOTION_API_KEY)")
-    parser.add_argument("--write-env", action="store_true", help="écrit NOTION_DATABASE_ID dans le .env du projet")
+    parser.add_argument("--write-env", action="store_true", help="écrit NOTION_DATABASE_ID dans mcp-server/.env")
     args = parser.parse_args()
 
     env_file = read_env_file(ENV_FILE)

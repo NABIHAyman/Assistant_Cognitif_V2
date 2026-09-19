@@ -86,5 +86,6 @@ et ne remplit `Tags` et `Status` que s'ils existent avec un type compatible.
 ## Ensuite
 
 1. Partager la base avec l'intégration Notion (menu « ⋯ » › *Connections*).
-2. Copier l'ID de la base (32 caractères de son URL) dans `NOTION_DATABASE_ID`.
+2. Copier l'ID de la base (32 caractères de son URL) dans `NOTION_DATABASE_ID`,
+   dans `mcp-server/.env`.
 3. Redémarrer le connecteur : `docker compose restart mcp-server`.

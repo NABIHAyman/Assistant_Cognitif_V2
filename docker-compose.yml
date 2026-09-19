@@ -57,8 +57,9 @@ services:
     ports:
       # Port hôte configurable (MCP_PORT dans .env), 8021 par défaut
       - "${MCP_PORT:-8021}:8000"
+    # Secrets Notion isolés : seul ce conteneur les reçoit (le backend ne les voit jamais)
     env_file:
-      - .env
+      - ./mcp-server/.env
     restart: unless-stopped
     networks:
       - cognitif_net
